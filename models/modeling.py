@@ -69,10 +69,11 @@ class Attention(nn.Module):
 
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
-        x = x.view(*new_x_shape)
-        return x.permute(0, 2, 1, 3)
+        x = x.view(*new_x_shape)  # (batch, num_patch + 1, num_attention_heads, attention_head_size)
+        return x.permute(0, 2, 1, 3)  # (batch, num_attention_heads, num_patch + 1, attention_head_size)
 
     def forward(self, hidden_states):
+        # 输入 hidden_states -> (batch, 197, 768) 即(batch, num_patch + 1, hid_dims)
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
@@ -81,17 +82,17 @@ class Attention(nn.Module):
         key_layer = self.transpose_for_scores(mixed_key_layer)
         value_layer = self.transpose_for_scores(mixed_value_layer)
 
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))  # (batch, num_attention_heads, num_patch + 1, num_patch + 1)
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         attention_probs = self.softmax(attention_scores)
-        weights = attention_probs if self.vis else None
+        weights = attention_probs if self.vis else None  # vis表示是否需要可视化
         attention_probs = self.attn_dropout(attention_probs)
 
-        context_layer = torch.matmul(attention_probs, value_layer)
-        context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
+        context_layer = torch.matmul(attention_probs, value_layer)  # (batch, num_attention_heads, num_patch + 1, attention_head_size)
+        context_layer = context_layer.permute(0, 2, 1, 3).contiguous()  # (batch, num_patch + 1, num_attention_heads, attention_head_size)
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
-        context_layer = context_layer.view(*new_context_layer_shape)
-        attention_output = self.out(context_layer)
+        context_layer = context_layer.view(*new_context_layer_shape)  # (batch, num_patch + 1, all_head_size)
+        attention_output = self.out(context_layer)  # (batch, num_patch + 1, hidden_size)
         attention_output = self.proj_dropout(attention_output)
         return attention_output, weights
 
@@ -113,6 +114,7 @@ class Mlp(nn.Module):
         nn.init.normal_(self.fc2.bias, std=1e-6)
 
     def forward(self, x):
+        # x的维度为# (batch, num_patch + 1, hidden_size)
         x = self.fc1(x)
         x = self.act_fn(x)
         x = self.dropout(x)
