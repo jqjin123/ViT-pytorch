@@ -134,7 +134,7 @@ class Embeddings(nn.Module):
         if config.patches.get("grid") is not None:
             grid_size = config.patches["grid"]
             patch_size = (img_size[0] // 16 // grid_size[0], img_size[1] // 16 // grid_size[1])
-            n_patches = (img_size[0] // 16) * (img_size[1] // 16)
+            n_patches = (img_size[0] // 16) * (img_size[1] // 16)  # 这里的16是resnet的缩放倍数
             self.hybrid = True
         else:
             patch_size = _pair(config.patches["size"])
@@ -160,9 +160,9 @@ class Embeddings(nn.Module):
 
         if self.hybrid:
             x = self.hybrid_model(x)
-        x = self.patch_embeddings(x)
-        x = x.flatten(2)
-        x = x.transpose(-1, -2)
+        x = self.patch_embeddings(x)  # (batch, hidden_size, w, h)
+        x = x.flatten(2)  # (batch, hidden_size, w*h)
+        x = x.transpose(-1, -2)  # (batch, w*h, hidden_size)
         x = torch.cat((cls_tokens, x), dim=1)
 
         embeddings = x + self.position_embeddings
